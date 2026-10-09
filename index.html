@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#9d174d">
+  <meta name="description" content="Gestion privée des commandes, produits et dépenses de Gourmet's City.">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Gestion · Gourmet's City</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div id="lock" class="lock-screen">
+    <div class="lock-card">
+      <div class="brand-mark">G<span>✦</span>C</div>
+      <p class="eyebrow">GOURMET'S CITY · DAKAR</p>
+      <h1 id="lock-title">Votre atelier, bien organisé.</h1>
+      <p id="lock-copy" class="muted">Créez un mot de passe pour protéger vos données sur cet appareil. Gardez-le précieusement : il ne peut pas être récupéré.</p>
+      <form id="lock-form">
+        <label for="passphrase">Mot de passe</label>
+        <input id="passphrase" type="password" minlength="8" required autocomplete="current-password" placeholder="8 caractères minimum">
+        <button class="button primary full" id="unlock-button" type="submit">Créer mon espace</button>
+        <p id="lock-error" class="form-error" role="alert"></p>
+      </form>
+      <div class="lock-note">Sur iPhone, ajoutez d’abord l’application à l’écran d’accueil, puis saisissez vos données dedans. Faites une sauvegarde chaque mois et gardez-la dans Fichiers ou iCloud Drive.</div>
+      <button type="button" class="text-button" id="restore-from-lock">Restaurer une sauvegarde</button>
+      <input type="file" id="restore-lock-file" accept="application/json,.json" hidden>
+    </div>
+  </div>
+
+  <div id="app" class="app-shell" hidden>
+    <aside class="sidebar">
+      <div class="sidebar-brand"><div class="brand-mark small">G<span>✦</span>C</div><div><strong>Gourmet's City</strong><small>Espace de gestion</small></div></div>
+      <nav class="side-nav" aria-label="Navigation principale">
+        <button data-view="dashboard" class="nav-button active"><span>◫</span> Vue d’ensemble</button>
+        <button data-view="orders" class="nav-button"><span>▤</span> Commandes</button>
+        <button data-view="products" class="nav-button"><span>▦</span> Produits</button>
+        <button data-view="expenses" class="nav-button"><span>◈</span> Dépenses</button>
+        <button data-view="settings" class="nav-button"><span>⚙</span> Réglages</button>
+      </nav>
+      <div class="sidebar-foot"><span class="offline-dot"></span> Fonctionne hors connexion <button id="lock-button" class="text-button">Verrouiller</button></div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar"><div><p class="eyebrow">GOURMET'S CITY · GESTION</p><h1 id="page-title">Vue d’ensemble</h1></div><div class="top-actions"><span id="today-label"></span><button type="button" class="button primary" id="quick-order">＋ Nouvelle commande</button></div></header>
+      <div id="notice" class="notice" role="status" hidden></div>
+
+      <section id="view-dashboard" class="view">
+        <div class="welcome-card"><div><span class="welcome-kicker">Bonjour 👋</span><h2>Tout votre atelier<br>en un seul endroit.</h2><p>Suivez les commandes, les encaissements et les dépenses, même sans internet.</p></div><div class="welcome-art" aria-hidden="true">✦<span>♡</span></div></div>
+        <div class="section-heading"><div><p class="eyebrow">AUJOURD’HUI & CE MOIS</p><h2>Les chiffres clés</h2></div><span id="month-label" class="period-pill"></span></div>
+        <div class="stats-grid">
+          <article class="stat-card"><span class="stat-icon pink">▤</span><span>Commandes à suivre</span><strong id="stat-open">0</strong><small>Non terminées</small></article>
+          <article class="stat-card"><span class="stat-icon green">↗</span><span>Ventes livrées</span><strong id="stat-sales">0 F</strong><small>Ce mois</small></article>
+          <article class="stat-card"><span class="stat-icon gold">◉</span><span>Déjà encaissé</span><strong id="stat-paid">0 F</strong><small>Commandes de ce mois</small></article>
+          <article class="stat-card"><span class="stat-icon blue">↘</span><span>Dépenses</span><strong id="stat-expenses">0 F</strong><small>Ce mois</small></article>
+        </div>
+        <div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><p class="eyebrow">À NE PAS OUBLIER</p><h3>Prochaines commandes</h3></div><button class="text-button" data-go="orders">Tout voir →</button></div><div id="upcoming-list"></div></section><section class="panel"><div class="panel-head"><div><p class="eyebrow">SUIVI RAPIDE</p><h3>À surveiller</h3></div></div><div id="alerts-list"></div><div class="summary-box"><span>Repère du mois</span><strong id="stat-cash">0 F</strong><small>Déjà encaissé sur les commandes du mois, moins les dépenses du mois</small></div></section></div>
+      </section>
+
+      <section id="view-orders" class="view" hidden>
+        <div class="section-heading"><div><p class="eyebrow">SUIVI CLIENTS</p><h2>Commandes</h2><p class="muted">De la prise de commande jusqu’à la livraison et au paiement.</p></div><button class="button primary section-action" data-add="order">＋ Ajouter</button></div>
+        <div class="toolbar"><input id="order-search" type="search" placeholder="Rechercher un numéro, client, produit…" aria-label="Rechercher des commandes"><select id="order-filter" aria-label="Filtrer par statut"><option value="all">Tous les statuts</option><option value="nouvelle">Nouvelle</option><option value="preparation">En préparation</option><option value="prete">Prête</option><option value="livraison">En livraison</option><option value="livree">Livrée</option><option value="annulee">Annulée</option></select></div>
+        <div id="orders-list" class="cards-list"></div>
+      </section>
+
+      <section id="view-products" class="view" hidden>
+        <div class="section-heading"><div><p class="eyebrow">CATALOGUE & STOCK</p><h2>Produits</h2><p class="muted">Prix, coût et stock. Le stock se met à jour manuellement.</p></div><button class="button primary section-action" data-add="product">＋ Ajouter</button></div>
+        <div class="toolbar"><input id="product-search" type="search" placeholder="Rechercher un produit…" aria-label="Rechercher des produits"></div>
+        <div id="products-list" class="product-grid"></div>
+      </section>
+
+      <section id="view-expenses" class="view" hidden>
+        <div class="section-heading"><div><p class="eyebrow">SORTIES D’ARGENT</p><h2>Dépenses</h2><p class="muted">Ingrédients, emballages, transport, loyer et autres frais.</p></div><button class="button primary section-action" data-add="expense">＋ Ajouter</button></div>
+        <div class="toolbar"><input id="expense-search" type="search" placeholder="Rechercher une dépense…" aria-label="Rechercher des dépenses"><select id="expense-filter" aria-label="Filtrer les dépenses"><option value="all">Toutes les dates</option><option value="month">Ce mois</option></select></div>
+        <div id="expenses-list" class="cards-list"></div>
+      </section>
+
+      <section id="view-settings" class="view" hidden>
+        <div class="section-heading"><div><p class="eyebrow">VOTRE ESPACE</p><h2>Réglages & sauvegardes</h2></div></div>
+        <div class="settings-grid"><article class="panel settings-panel"><div class="settings-icon">↓</div><h3>Sauvegarder les données</h3><p>Gardez une copie chiffrée de vos commandes, produits et dépenses. Faites-le chaque semaine et avant de changer de téléphone.</p><button class="button primary" id="export-backup">Télécharger une sauvegarde</button></article>
+        <article class="panel settings-panel"><div class="settings-icon">↑</div><h3>Restaurer une sauvegarde</h3><p>Remplace les données de cet appareil par celles d’un fichier de sauvegarde. Le mot de passe de ce fichier sera nécessaire.</p><button class="button secondary" id="import-backup">Choisir un fichier</button><input type="file" id="restore-file" accept="application/json,.json" hidden></article>
+        <article class="panel settings-panel"><div class="settings-icon">▤</div><h3>Exporter les commandes</h3><p>Un fichier CSV lisible dans Excel ou Google Sheets pour partager votre registre de commandes.</p><button class="button secondary" id="export-csv">Télécharger le CSV</button></article>
+        <article class="panel settings-panel"><div class="settings-icon">⌂</div><h3>Installer sur le téléphone</h3><p>Dans Safari, touchez Partager puis « Sur l’écran d’accueil ». Ouvrez ensuite l’application depuis son icône avant de saisir vos données. Elle fonctionne hors connexion après sa première ouverture.</p><button class="button secondary" id="install-button" hidden>Installer l’application</button></article></div>
+        <div class="privacy-note"><strong>Conserver vos données.</strong> Elles sont chiffrées dans la base locale de cette application et ne sont pas synchronisées. Installez l’application sur l’écran d’accueil et faites une sauvegarde mensuelle. Un effacement de l’application, un téléphone perdu ou un manque d’espace peut supprimer la base locale ; seul le fichier de sauvegarde permettra alors de retrouver les données.</div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Navigation mobile"><button data-view="dashboard" class="active"><span>◫</span>Accueil</button><button data-view="orders"><span>▤</span>Commandes</button><button data-view="products"><span>▦</span>Produits</button><button data-view="expenses"><span>◈</span>Dépenses</button><button data-view="settings"><span>⚙</span>Réglages</button></nav>
+  </div>
+
+  <dialog id="editor-dialog"><div class="dialog-top"><div><p class="eyebrow" id="dialog-kicker">NOUVEAU</p><h2 id="dialog-title">Nouvelle commande</h2></div><button type="button" class="icon-button" id="close-dialog" aria-label="Fermer">×</button></div><form id="editor-form"><div id="form-fields" class="form-grid"></div><div class="dialog-actions"><button type="button" class="button secondary" id="cancel-dialog">Annuler</button><button type="submit" class="button primary">Enregistrer</button></div></form></dialog>
+  <dialog id="confirm-dialog"><h2 id="confirm-title">Confirmer</h2><p id="confirm-copy"></p><div class="dialog-actions"><button type="button" class="button secondary" id="confirm-cancel">Annuler</button><button type="button" class="button danger" id="confirm-yes">Supprimer</button></div></dialog>
+</body>
+</html>
