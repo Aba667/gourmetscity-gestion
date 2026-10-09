@@ -21,16 +21,19 @@
       <div class="brand-mark">G<span>✦</span>C</div>
       <p class="eyebrow">GOURMET'S CITY · DAKAR</p>
       <h1 id="lock-title">Votre atelier, bien organisé.</h1>
-      <p id="lock-copy" class="muted">Créez un mot de passe pour protéger vos données sur cet appareil. Gardez-le précieusement : il ne peut pas être récupéré.</p>
+      <p id="lock-copy" class="muted">Connectez-vous pour retrouver vos commandes sur tous vos appareils.</p>
       <form id="lock-form">
-        <label for="passphrase">Mot de passe</label>
-        <input id="passphrase" type="password" minlength="8" required autocomplete="current-password" placeholder="8 caractères minimum">
-        <button class="button primary full" id="unlock-button" type="submit">Créer mon espace</button>
+        <label for="username">Identifiant</label>
+        <input id="username" type="text" required autocomplete="username" value="adjafatou@gourmetcity.com" autocapitalize="none" spellcheck="false">
+        <label for="passphrase" id="password-label">Mot de passe</label>
+        <input id="passphrase" type="password" minlength="12" required autocomplete="current-password" placeholder="12 caractères minimum">
+        <div id="recovery-fields" hidden><label for="recovery-code">Code de récupération</label><input id="recovery-code" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="Votre code de récupération"></div>
+        <div id="setup-fields" hidden><label for="setup-code">Code de création du compte</label><input id="setup-code" type="password" autocomplete="off" placeholder="Code fourni par le propriétaire"></div>
+        <button class="button primary full" id="unlock-button" type="submit">Se connecter</button>
         <p id="lock-error" class="form-error" role="alert"></p>
       </form>
-      <div class="lock-note">Sur iPhone, ajoutez d’abord l’application à l’écran d’accueil, puis saisissez vos données dedans. Faites une sauvegarde chaque mois et gardez-la dans Fichiers ou iCloud Drive.</div>
-      <button type="button" class="text-button" id="restore-from-lock">Restaurer une sauvegarde</button>
-      <input type="file" id="restore-lock-file" accept="application/json,.json" hidden>
+      <button type="button" class="text-button" id="recovery-toggle" hidden>Mot de passe oublié ?</button>
+      <div class="lock-note">Vos données chiffrées sont synchronisées quand Internet est disponible. Gardez votre mot de passe et téléchargez aussi une sauvegarde régulière.</div>
     </div>
   </div>
 
@@ -44,7 +47,7 @@
         <button data-view="expenses" class="nav-button"><span>◈</span> Dépenses</button>
         <button data-view="settings" class="nav-button"><span>⚙</span> Réglages</button>
       </nav>
-      <div class="sidebar-foot"><span class="offline-dot"></span> Fonctionne hors connexion <button id="lock-button" class="text-button">Verrouiller</button></div>
+      <div class="sidebar-foot"><span class="offline-dot"></span> Synchronisé entre appareils <button id="lock-button" class="text-button">Se déconnecter</button></div>
     </aside>
 
     <main class="main-content">
@@ -52,7 +55,7 @@
       <div id="notice" class="notice" role="status" hidden></div>
 
       <section id="view-dashboard" class="view">
-        <div class="welcome-card"><div><span class="welcome-kicker">Bonjour 👋</span><h2>Tout votre atelier<br>en un seul endroit.</h2><p>Suivez les commandes, les encaissements et les dépenses, même sans internet.</p></div><div class="welcome-art" aria-hidden="true">✦<span>♡</span></div></div>
+        <div class="welcome-card"><div><span class="welcome-kicker">Bonjour 👋</span><h2>Tout votre atelier<br>en un seul endroit.</h2><p>Suivez les commandes, les encaissements et les dépenses sur vos appareils.</p></div><div class="welcome-art" aria-hidden="true">✦<span>♡</span></div></div>
         <div class="section-heading"><div><p class="eyebrow">AUJOURD’HUI & CE MOIS</p><h2>Les chiffres clés</h2></div><span id="month-label" class="period-pill"></span></div>
         <div class="stats-grid">
           <article class="stat-card"><span class="stat-icon pink">▤</span><span>Commandes à suivre</span><strong id="stat-open">0</strong><small>Non terminées</small></article>
@@ -83,11 +86,12 @@
 
       <section id="view-settings" class="view" hidden>
         <div class="section-heading"><div><p class="eyebrow">VOTRE ESPACE</p><h2>Réglages & sauvegardes</h2></div></div>
-        <div class="settings-grid"><article class="panel settings-panel"><div class="settings-icon">↓</div><h3>Sauvegarder les données</h3><p>Gardez une copie chiffrée de vos commandes, produits et dépenses. Faites-le chaque semaine et avant de changer de téléphone.</p><button class="button primary" id="export-backup">Télécharger une sauvegarde</button></article>
-        <article class="panel settings-panel"><div class="settings-icon">↑</div><h3>Restaurer une sauvegarde</h3><p>Remplace les données de cet appareil par celles d’un fichier de sauvegarde. Le mot de passe de ce fichier sera nécessaire.</p><button class="button secondary" id="import-backup">Choisir un fichier</button><input type="file" id="restore-file" accept="application/json,.json" hidden></article>
+        <div class="settings-grid"><article class="panel settings-panel"><div class="settings-icon">↓</div><h3>Sauvegarder les données</h3><p>Gardez une copie chiffrée de vos commandes, produits et dépenses. Faites-le chaque mois et avant de changer de téléphone.</p><button class="button primary" id="export-backup">Télécharger une sauvegarde</button></article>
+        <article class="panel settings-panel"><div class="settings-icon">↑</div><h3>Restaurer une sauvegarde</h3><p>Remplace les données synchronisées par celles d’un fichier de sauvegarde. Le mot de passe de ce fichier sera nécessaire.</p><button class="button secondary" id="import-backup">Choisir un fichier</button><input type="file" id="restore-file" accept="application/json,.json" hidden></article>
         <article class="panel settings-panel"><div class="settings-icon">▤</div><h3>Exporter les commandes</h3><p>Un fichier CSV lisible dans Excel ou Google Sheets pour partager votre registre de commandes.</p><button class="button secondary" id="export-csv">Télécharger le CSV</button></article>
-        <article class="panel settings-panel"><div class="settings-icon">⌂</div><h3>Installer sur le téléphone</h3><p>Dans Safari, touchez Partager puis « Sur l’écran d’accueil ». Ouvrez ensuite l’application depuis son icône avant de saisir vos données. Elle fonctionne hors connexion après sa première ouverture.</p><button class="button secondary" id="install-button" hidden>Installer l’application</button></article></div>
-        <div class="privacy-note"><strong>Conserver vos données.</strong> Elles sont chiffrées dans la base locale de cette application et ne sont pas synchronisées. Installez l’application sur l’écran d’accueil et faites une sauvegarde mensuelle. Un effacement de l’application, un téléphone perdu ou un manque d’espace peut supprimer la base locale ; seul le fichier de sauvegarde permettra alors de retrouver les données.</div>
+        <article class="panel settings-panel"><div class="settings-icon">✧</div><h3>Code de récupération</h3><p>À conserver en lieu sûr pour retrouver le compte si le mot de passe est oublié.</p><button class="button secondary" id="show-recovery">Voir le code</button></article>
+        <article class="panel settings-panel"><div class="settings-icon">⌂</div><h3>Installer sur le téléphone</h3><p>Dans Safari, touchez Partager puis « Sur l’écran d’accueil ». Connectez-vous ensuite sur votre iPhone et votre iPad avec le même compte.</p><button class="button secondary" id="install-button" hidden>Installer l’application</button></article></div>
+        <div class="privacy-note"><strong>Conserver vos données.</strong> Elles sont chiffrées avant la synchronisation et restent accessibles avec le même identifiant et mot de passe sur vos appareils. Un appareil perdu ne supprime pas la copie en ligne. Faites aussi une sauvegarde mensuelle et gardez votre mot de passe : sans lui, les données chiffrées ne peuvent pas être récupérées. Une connexion Internet est nécessaire pour enregistrer les modifications.</div>
       </section>
     </main>
 
@@ -96,5 +100,7 @@
 
   <dialog id="editor-dialog"><div class="dialog-top"><div><p class="eyebrow" id="dialog-kicker">NOUVEAU</p><h2 id="dialog-title">Nouvelle commande</h2></div><button type="button" class="icon-button" id="close-dialog" aria-label="Fermer">×</button></div><form id="editor-form"><div id="form-fields" class="form-grid"></div><div class="dialog-actions"><button type="button" class="button secondary" id="cancel-dialog">Annuler</button><button type="submit" class="button primary">Enregistrer</button></div></form></dialog>
   <dialog id="confirm-dialog"><h2 id="confirm-title">Confirmer</h2><p id="confirm-copy"></p><div class="dialog-actions"><button type="button" class="button secondary" id="confirm-cancel">Annuler</button><button type="button" class="button danger" id="confirm-yes">Supprimer</button></div></dialog>
+  <dialog id="recovery-dialog" class="recovery-dialog"><h2>Gardez ce code de récupération</h2><p>Il permet de créer un nouveau mot de passe si vous oubliez l’ancien. Conservez-le séparément de votre téléphone.</p><code id="recovery-display"></code><div class="dialog-actions"><button type="button" class="button secondary" id="download-recovery">Télécharger le code</button><button type="button" class="button primary" id="close-recovery">J’ai conservé le code</button></div></dialog>
+  <dialog id="restore-dialog" class="recovery-dialog"><h2>Restaurer cette sauvegarde ?</h2><p>Les données synchronisées sur tous les appareils seront remplacées par ce fichier.</p><form id="restore-form"><label for="restore-password">Mot de passe du fichier</label><input id="restore-password" type="password" required autocomplete="off"><p id="restore-error" class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button secondary" id="cancel-restore">Annuler</button><button type="submit" class="button primary">Restaurer partout</button></div></form></dialog>
 </body>
 </html>

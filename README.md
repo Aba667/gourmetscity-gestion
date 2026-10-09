@@ -1,16 +1,21 @@
 # Gourmet's City · Gestion
 
-Application de gestion installable sur iPhone/iPad : commandes, produits, dépenses, acomptes, reste à encaisser et export CSV. Les données sont chiffrées avec le mot de passe choisi sur l'appareil, stockées dans IndexedDB et disponibles hors connexion après installation.
+Application privée pour iPhone et iPad : commandes, produits, dépenses, acomptes, reste à encaisser et export CSV.
 
 ## Mise en route
 
 1. Ouvrir `https://gestion.gourmetscity.com` dans Safari.
 2. Utiliser Partager → Sur l'écran d'accueil.
-3. Ouvrir l'icône installée, puis créer un mot de passe d'au moins 8 caractères.
-4. Faire une sauvegarde chiffrée depuis Réglages au moins une fois par mois et la conserver dans Fichiers/iCloud Drive. Il faut garder le mot de passe pour restaurer.
+3. Ouvrir l'icône installée, puis se connecter avec l'identifiant et le mot de passe du compte.
+4. Sur le second appareil, répéter les étapes 1 à 3.
+5. Faire une sauvegarde chiffrée depuis Réglages au moins une fois par mois et la conserver dans Fichiers/iCloud Drive. Il faut garder le mot de passe pour restaurer.
 
-Les données saisies dans Safari et dans l'application installée peuvent être séparées sur iOS. Elles ne sont pas synchronisées entre iPhone et iPad. Les données locales peuvent être perdues si l'application ou les données du navigateur sont effacées, ou si le téléphone est perdu ; la sauvegarde est le moyen de récupération.
+Le navigateur chiffre les données avec le mot de passe avant la synchronisation vers Cloudflare D1. Une connexion Internet est nécessaire pour enregistrer les modifications. Si les deux appareils modifient simultanément les données, la seconde écriture est refusée : il faut recharger l'application et refaire la modification. Un appareil perdu ne supprime pas la copie en ligne.
+
+L'adresse `adjafatou@gourmetcity.com` est un **identifiant**, pas une boîte e-mail. Aucun e-mail de récupération ne peut donc être envoyé. La création du compte affiche un code de récupération à conserver séparément. Il permet de créer un nouveau mot de passe si l'ancien est oublié. Conservez aussi le mot de passe dans un gestionnaire de mots de passe.
 
 ## Déploiement
 
-Site statique prévu pour GitHub Pages, branche `main`, dossier `/`, domaine `gestion.gourmetscity.com`. Le DNS OVH doit avoir un CNAME `gestion` vers `aba667.github.io.`. Ne pas saisir de données avant que le domaine définitif soit actif : le stockage dépend du domaine.
+Le site statique est hébergé sur GitHub Pages, branche `main`, dossier `/`, domaine `gestion.gourmetscity.com`. Le DNS OVH a un CNAME `gestion` vers `aba667.github.io.`.
+
+L'API Cloudflare Worker est dans `sync-worker/worker.js` et la structure D1 dans `sync-worker/schema.sql`. Le service doit être nommé `gourmetscity-gestion-api` dans le compte Cloudflare dont le sous-domaine Workers est `footmaster-web.workers.dev`. Il faut lier la base D1 à la variable `DB`, définir `ALLOWED_ORIGIN=https://gestion.gourmetscity.com` et définir un secret `SETUP_CODE` avant la première création de compte. Ne mettez jamais ce code dans GitHub. Le code de création ne fonctionne qu'une fois ; aucun compte public supplémentaire ne peut être ouvert.

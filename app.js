@@ -1,6 +1,7 @@
-/* Gourmet's City · gestion locale chiffrée. Aucun envoi de données. */
+/* Gourmet's City · données chiffrées avant synchronisation. */
 const KEY = 'gourmetscity-gestion-v1';
 const VERSION = 1;
+const API = 'https://gourmetscity-gestion-api.footmaster-web.workers.dev';
 const STATUS = {nouvelle:'Nouvelle',preparation:'En préparation',prete:'Prête',livraison:'En livraison',livree:'Livrée',annulee:'Annulée'};
 const PAYMENT = ['Liquide','Orange Money','Wave'];
 const CATEGORIES = ['Ingrédients','Emballages','Transport','Livraison','Loyer','Matériel','Marketing','Autre'];
@@ -14,6 +15,14 @@ let edit = null;
 let deferredInstall = null;
 let saving = false;
 let envelopeCache = null;
+let authToken = null;
+let remoteRevision = null;
+let accountExists = true;
+let recoveryMode = false;
+let recoveryCode = null;
+let recoveryKey = null;
+let recoverySalt = null;
+let pendingBackup = null;
 const channel = 'BroadcastChannel' in window ? new BroadcastChannel('gourmetscity-gestion') : null;
 
 function vault() { return new Promise((resolve,reject)=>{ const request=indexedDB.open(KEY,1); request.onupgradeneeded=()=>request.result.createObjectStore('vault'); request.onsuccess=()=>resolve(request.result); request.onerror=()=>reject(request.error); }); }
@@ -32,12 +41,90 @@ function uuid() { return crypto.randomUUID(); }
 function notice(message,bad=false) { const n=$('#notice'); n.textContent=message; n.hidden=false; n.style.background=bad?'#fff0f0':'#eaf7ee'; n.style.borderColor=bad?'#edb8c3':'#bfe6c9'; n.style.color=bad?'#a32645':'#256d43'; clearTimeout(notice.timer); notice.timer=setTimeout(()=>n.hidden=true,6000); }
 function b64(bytes) { return btoa(String.fromCharCode(...bytes)); }
 function unb64(value) { return Uint8Array.from(atob(value), c=>c.charCodeAt(0)); }
+function hex(bytes) { return [...bytes].map(b=>b.toString(16).padStart(2,'0')).join(''); }
+async function recoveryProof(code) { return hex(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(code)))); }
+async function authProof(username,password) { const material=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']); const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:new TextEncoder().encode(`gourmetscity-sync-auth-v1:${username}`),iterations:250000,hash:'SHA-256'},material,256); return hex(new Uint8Array(bits)); }
+async function api(path,method='GET',data=null,token=authToken) { let response; try { response=await fetch(API+path,{method,headers:{...(data?{'Content-Type':'application/json'}:{}),...(token?{'Authorization':`Bearer ${token}`}:{})},body:data?JSON.stringify(data):undefined,cache:'no-store'}); } catch { throw Error('Connexion Internet indisponible. Réessayez quand le réseau revient.'); } const result=await response.json().catch(()=>({})); if(!response.ok) throw Error(result.error||'Service indisponible. Réessayez.'); return result; }
 async function derive(password,saltBytes) { const material=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveKey']); return crypto.subtle.deriveKey({name:'PBKDF2',salt:saltBytes,iterations:250000,hash:'SHA-256'},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']); }
 async function decrypt(envelope,key) { const clear=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(envelope.iv)},key,unb64(envelope.data)); const parsed=JSON.parse(new TextDecoder().decode(clear)); if (parsed.version!==VERSION || !Array.isArray(parsed.orders)||!Array.isArray(parsed.products)||!Array.isArray(parsed.expenses)) throw Error('Sauvegarde incompatible'); return parsed; }
-async function persist() { if (!cryptoKey||!salt) throw Error('Espace verrouillé'); const iv=crypto.getRandomValues(new Uint8Array(12)); const bytes=new TextEncoder().encode(JSON.stringify(state)); const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},cryptoKey,bytes); await writeEnvelope({version:VERSION,salt:b64(salt),iv:b64(iv),data:b64(new Uint8Array(cipher)),savedAt:new Date().toISOString()}); channel?.postMessage('changed'); }
-async function change(mutator) { if (saving) return false; saving=true; const before=JSON.stringify(state); try { mutator(); await persist(); render(); return true; } catch(error) { state=JSON.parse(before); notice('Enregistrement impossible. Vérifiez l’espace disponible et réessayez.',true); return false; } finally { saving=false; } }
+async function encryptState() { if (!cryptoKey||!salt) throw Error('Espace verrouillé'); return encryptWith(cryptoKey,salt); }
+async function encryptWith(key,keySalt) { const iv=crypto.getRandomValues(new Uint8Array(12)); const bytes=new TextEncoder().encode(JSON.stringify(state)); const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,bytes); return {version:VERSION,salt:b64(keySalt),iv:b64(iv),data:b64(new Uint8Array(cipher)),savedAt:new Date().toISOString()}; }
+async function wrapRecovery() { const iv=crypto.getRandomValues(new Uint8Array(12)); const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},cryptoKey,new TextEncoder().encode(recoveryCode)); return {iv:b64(iv),data:b64(new Uint8Array(cipher))}; }
+async function unwrapRecovery(wrap) { const clear=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(wrap.iv)},cryptoKey,unb64(wrap.data)); return new TextDecoder().decode(clear); }
+async function persist() { if (!authToken||!remoteRevision) throw Error('Reconnectez-vous pour enregistrer.'); const envelope=await encryptWith(cryptoKey,salt); const recoveryEnvelope=await encryptWith(recoveryKey,recoverySalt); const result=await api('/snapshot','PUT',{revision:remoteRevision,envelope,recoveryEnvelope}); remoteRevision=result.revision; await writeEnvelope(envelope).catch(()=>{}); channel?.postMessage('changed'); }
+async function change(mutator) { if (saving) return false; saving=true; const before=JSON.stringify(state); try { mutator(); await persist(); render(); return true; } catch(error) { state=JSON.parse(before); notice(error.message||'Enregistrement impossible. Réessayez.',true); return false; } finally { saving=false; } }
 function openApp() { $('#lock').hidden=true; $('#app').hidden=false; $('#today-label').textContent=dateLabel(dakDate()); showView('dashboard'); }
-async function unlock(event) { event.preventDefault(); const pass=$('#passphrase').value; const button=$('#unlock-button'); const error=$('#lock-error'); error.textContent=''; if (!crypto?.subtle) { error.textContent='Ouvrez l’application via HTTPS pour protéger les données.'; return; } button.disabled=true; try { const envelope=await readEnvelope(); if (envelope) { if (envelope.version!==VERSION) throw Error('Version incompatible'); const candidate=await derive(pass,unb64(envelope.salt)); state=await decrypt(envelope,candidate); cryptoKey=candidate; salt=unb64(envelope.salt); } else { if (pass.length<8) throw Error('Choisissez au moins 8 caractères.'); salt=crypto.getRandomValues(new Uint8Array(16)); cryptoKey=await derive(pass,salt); state.createdAt=new Date().toISOString(); await persist(); } $('#passphrase').value=''; try { await navigator.storage?.persist?.(); } catch {} openApp(); const last=state.lastBackupAt||state.createdAt; if (last && Date.now()-new Date(last).getTime()>30*864e5) notice('Pensez à télécharger une sauvegarde dans Réglages pour conserver vos données longtemps.',true); } catch(err) { error.textContent=err.message==='OperationError'?'Mot de passe incorrect.':(err.message||'Impossible d’ouvrir les données.'); cryptoKey=null; } finally { button.disabled=false; } }
+async function unlock(event) {
+  event.preventDefault();
+  const pass=$('#passphrase').value;
+  const username=$('#username').value.trim().toLowerCase();
+  let createdNow=false;
+  const button=$('#unlock-button'), error=$('#lock-error');
+  error.textContent='';
+  if (!crypto?.subtle) { error.textContent='Ouvrez l’application via HTTPS pour protéger les données.'; return; }
+  button.disabled=true;
+  try {
+    if(pass.length<12) throw Error('Choisissez au moins 12 caractères.');
+    const verifier=await authProof(username,pass);
+    if(recoveryMode) {
+      recoveryCode=$('#recovery-code').value.replace(/[\s-]/g,'').toLowerCase();
+      if(!/^[a-f0-9]{48}$/.test(recoveryCode)) throw Error('Code de récupération invalide.');
+      const recoveryVerifier=await recoveryProof(recoveryCode);
+      const login=await api('/recover-login','POST',{username,recoveryVerifier},null);
+      authToken=login.token;
+      const remote=await api('/snapshot/recovery');
+      remoteRevision=remote.revision;
+      recoverySalt=unb64(remote.recoveryEnvelope.salt);
+      recoveryKey=await derive(recoveryCode,recoverySalt);
+      state=await decrypt(remote.recoveryEnvelope,recoveryKey);
+      salt=crypto.getRandomValues(new Uint8Array(16));
+      cryptoKey=await derive(pass,salt);
+      const envelope=await encryptState();
+      const wrappedRecovery=await wrapRecovery();
+      const reset=await api('/reset-password','POST',{revision:remoteRevision,verifier,envelope,wrappedRecovery});
+      authToken=reset.token; remoteRevision=reset.revision;
+      await writeEnvelope(envelope).catch(()=>{});
+    } else if(accountExists) {
+      const login=await api('/login','POST',{username,verifier},null);
+      authToken=login.token;
+      const remote=await api('/snapshot');
+      remoteRevision=remote.revision;
+      salt=unb64(remote.envelope.salt);
+      cryptoKey=await derive(pass,salt);
+      state=await decrypt(remote.envelope,cryptoKey);
+      recoveryCode=await unwrapRecovery(remote.wrappedRecovery);
+      recoverySalt=unb64(remote.recoveryEnvelope.salt);
+      recoveryKey=await derive(recoveryCode,recoverySalt);
+      await writeEnvelope(remote.envelope).catch(()=>{});
+    } else {
+      const setupCode=$('#setup-code').value.trim();
+      if(!setupCode) throw Error('Saisissez le code de création du compte.');
+      salt=crypto.getRandomValues(new Uint8Array(16));
+      cryptoKey=await derive(pass,salt);
+      recoveryCode=hex(crypto.getRandomValues(new Uint8Array(24)));
+      recoverySalt=crypto.getRandomValues(new Uint8Array(16));
+      recoveryKey=await derive(recoveryCode,recoverySalt);
+      state={version:VERSION,orders:[],products:[],expenses:[],createdAt:new Date().toISOString()};
+      const envelope=await encryptState();
+      const recoveryEnvelope=await encryptWith(recoveryKey,recoverySalt);
+      const wrappedRecovery=await wrapRecovery();
+      const recoveryVerifier=await recoveryProof(recoveryCode);
+      const setup=await api('/setup','POST',{username,verifier,recoveryVerifier,envelope,recoveryEnvelope,wrappedRecovery,setupCode},null);
+      authToken=setup.token; remoteRevision=setup.revision; accountExists=true;
+      createdNow=true;
+      await writeEnvelope(envelope).catch(()=>{});
+    }
+    $('#passphrase').value=''; $('#setup-code').value=''; $('#recovery-code').value='';
+    try { await navigator.storage?.persist?.(); } catch {}
+    openApp();
+    if(createdNow) showRecovery();
+    const last=state.lastBackupAt||state.createdAt;
+    if(last && Date.now()-new Date(last).getTime()>30*864e5) notice('Pensez à télécharger une sauvegarde dans Réglages pour conserver vos données longtemps.',true);
+  } catch(err) {
+    error.textContent=err.message==='OperationError'?'Mot de passe ou code incorrect.':(err.message||'Impossible d’ouvrir les données.');
+    cryptoKey=null; authToken=null; recoveryKey=null; recoveryCode=null;
+  } finally { button.disabled=false; }
+}
 function showView(name) { activeView=name; $$('.view').forEach(el=>el.hidden=el.id!==`view-${name}`); $$('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===name)); const names={dashboard:'Vue d’ensemble',orders:'Commandes',products:'Produits',expenses:'Dépenses',settings:'Réglages'}; $('#page-title').textContent=names[name]; render(); window.scrollTo({top:0,behavior:'smooth'}); }
 function nextNumber() { const day=dakDate().replaceAll('-',''); const prefix=`GC-${day}-`; const used=state.orders.filter(o=>o.number.startsWith(prefix)).map(o=>Number(o.number.slice(prefix.length))||0); return prefix+String(Math.max(0,...used)+1).padStart(3,'0'); }
 function recordField(name,label,value='',opts={}) { const type=opts.type||'text'; const required=opts.required?'required':''; const min=opts.min!==undefined?`min="${opts.min}"`:''; const max=opts.max!==undefined?`max="${opts.max}"`:''; const step=type==='number'?'step="1"':''; const full=opts.full?'full':''; const placeholder=opts.placeholder?`placeholder="${esc(opts.placeholder)}"`:''; let input=type==='textarea'?`<textarea name="${name}" ${required} ${placeholder}>${esc(value)}</textarea>`:type==='select'?`<select name="${name}" ${required}>${opts.options.map(([v,t])=>`<option value="${esc(v)}" ${String(value)===v?'selected':''}>${esc(t)}</option>`).join('')}</select>`:`<input name="${name}" type="${type}" value="${esc(value)}" ${required} ${min} ${max} ${step} ${placeholder} ${opts.autocomplete?`autocomplete="${opts.autocomplete}"`:''}>`; return `<div class="field ${full}"><label>${esc(label)}${opts.required?' <span class="required">*</span>':''}</label>${input}${opts.help?`<small>${esc(opts.help)}</small>`:''}</div>`; }
@@ -50,9 +137,9 @@ async function saveEditor(event) { event.preventDefault(); if (!edit||saving) re
   if (kind==='order') { item={number:v('number'),date:v('date'),customer:v('customer'),phone:v('phone'),designation:v('designation'),quantity:number(v('quantity')),amount:number(v('amount')),deliveryFee:number(v('deliveryFee')),paid:number(v('paid')),location:v('location'),dueDate:v('dueDate'),method:v('method'),status:v('status'),note:v('note')}; if (!item.number||!item.date||!item.phone||!item.designation||item.quantity<1) return notice('Complétez les champs obligatoires.',true); if (item.paid>total(item)) return notice('Le montant encaissé dépasse le total de la commande.',true); if (state.orders.some(o=>o.number.toLowerCase()===item.number.toLowerCase()&&o.id!==edit.id)) return notice('Ce numéro de commande existe déjà.',true); }
   if (kind==='product') { item={name:v('name'),category:v('category'),price:number(v('price')),cost:number(v('cost')),stock:number(v('stock')),lowStock:number(v('lowStock')),note:v('note')}; if (!item.name||v('price')==='') return notice('Indiquez le nom et le prix du produit.',true); }
   if (kind==='expense') { item={date:v('date'),category:v('category'),description:v('description'),amount:number(v('amount')),method:v('method'),note:v('note')}; if (!item.date||!item.description||v('amount')==='') return notice('Complétez la date, la désignation et le montant.',true); }
-  const id=edit.id; const saved=await change(()=>{ if(id){const index=state[list].findIndex(x=>x.id===id); if(index<0) throw Error('Élément introuvable'); state[list][index]={...state[list][index],...item,updatedAt:new Date().toISOString()};}else state[list].unshift({id:uuid(),...item,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}); }); if (saved) { closeEditor(); notice('Enregistré sur ce téléphone.'); }
+  const id=edit.id; const saved=await change(()=>{ if(id){const index=state[list].findIndex(x=>x.id===id); if(index<0) throw Error('Élément introuvable'); state[list][index]={...state[list][index],...item,updatedAt:new Date().toISOString()};}else state[list].unshift({id:uuid(),...item,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}); }); if (saved) { closeEditor(); notice('Enregistré et synchronisé.'); }
 }
-function askDelete(kind,id) { const noun={order:'cette commande',product:'ce produit',expense:'cette dépense'}[kind]; $('#confirm-title').textContent=`Supprimer ${noun} ?`; $('#confirm-copy').textContent='Cette action sera enregistrée immédiatement sur ce téléphone.'; $('#confirm-dialog').showModal(); $('#confirm-yes').onclick=async()=>{ const list={order:'orders',product:'products',expense:'expenses'}[kind]; const saved=await change(()=>{ state[list]=state[list].filter(x=>x.id!==id); }); if(saved){$('#confirm-dialog').close();notice('Élément supprimé.');} }; }
+function askDelete(kind,id) { const noun={order:'cette commande',product:'ce produit',expense:'cette dépense'}[kind]; $('#confirm-title').textContent=`Supprimer ${noun} ?`; $('#confirm-copy').textContent='Cette action sera synchronisée sur tous vos appareils.'; $('#confirm-dialog').showModal(); $('#confirm-yes').onclick=async()=>{ const list={order:'orders',product:'products',expense:'expenses'}[kind]; const saved=await change(()=>{ state[list]=state[list].filter(x=>x.id!==id); }); if(saved){$('#confirm-dialog').close();notice('Élément supprimé.');} }; }
 function empty(message) { return `<div class="empty">${esc(message)}</div>`; }
 function renderDashboard() { const now=dakDate(), month=monthOf(now); $('#month-label').textContent=new Intl.DateTimeFormat('fr-FR',{month:'long',year:'numeric',timeZone:'Africa/Dakar'}).format(new Date()); const open=state.orders.filter(o=>!['livree','annulee'].includes(o.status)); const monthOrders=state.orders.filter(o=>monthOf(o.date)===month&&o.status!=='annulee'); const sales=monthOrders.filter(o=>o.status==='livree').reduce((n,o)=>n+total(o),0); const paid=monthOrders.reduce((n,o)=>n+number(o.paid),0); const exp=state.expenses.filter(e=>monthOf(e.date)===month).reduce((n,e)=>n+number(e.amount),0); $('#stat-open').textContent=open.length; $('#stat-sales').textContent=money(sales); $('#stat-paid').textContent=money(paid); $('#stat-expenses').textContent=money(exp); $('#stat-cash').textContent=money(paid-exp);
   const upcoming=open.slice().sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999')).slice(0,5); $('#upcoming-list').innerHTML=upcoming.length?upcoming.map(o=>`<div class="list-row"><div><strong>${esc(o.number)} · ${esc(o.designation)}</strong><small>${esc(o.customer||o.phone)} · ${o.dueDate?dateLabel(o.dueDate):'Date à préciser'}</small></div><span class="amount">${money(total(o))}</span></div>`).join(''):empty('Aucune commande en cours. Ajoutez la première commande pour démarrer.');
@@ -64,7 +151,11 @@ function renderExpenses() { const q=$('#expense-search').value.toLowerCase().tri
 function render() { if ($('#app').hidden) return; renderDashboard(); renderOrders(); renderProducts(); renderExpenses(); }
 function download(name,text,type) { const blob=new Blob([text],{type}); const link=document.createElement('a'); link.href=URL.createObjectURL(blob); link.download=name; link.click(); setTimeout(()=>URL.revokeObjectURL(link.href),3000); }
 async function exportBackup() { if(!envelopeCache) return notice('Aucune donnée à sauvegarder.',true); download(`gourmetscity-sauvegarde-${dakDate()}.json`,JSON.stringify(envelopeCache),'application/json'); state.lastBackupAt=new Date().toISOString(); await persist(); notice('Sauvegarde chiffrée téléchargée. Gardez aussi le mot de passe et le fichier.'); }
-async function importBackup(file) { if(!file) return; try { const parsed=JSON.parse(await file.text()); if(parsed.version!==VERSION||!parsed.salt||!parsed.iv||!parsed.data||typeof parsed.data!=='string') throw Error('Fichier incompatible'); const okay=confirm('Remplacer toutes les données de ce téléphone par cette sauvegarde ? Vous devrez saisir son mot de passe.'); if(!okay) return; await writeEnvelope(parsed); location.reload(); } catch { notice('Ce fichier n’est pas une sauvegarde valide.',true); } }
+async function importBackup(file) { if(!file) return; try { const parsed=JSON.parse(await file.text()); if(parsed.version!==VERSION||!parsed.salt||!parsed.iv||!parsed.data||typeof parsed.data!=='string') throw Error('Fichier incompatible'); pendingBackup=parsed; $('#restore-error').textContent=''; $('#restore-dialog').showModal(); } catch { notice('Ce fichier n’est pas une sauvegarde valide.',true); } }
+async function restoreBackup(event) { event.preventDefault(); if(!pendingBackup) return; const button=event.submitter; button.disabled=true; try { const password=$('#restore-password').value; const backupKey=await derive(password,unb64(pendingBackup.salt)); const restored=await decrypt(pendingBackup,backupKey); if(await change(()=>{state=restored;})){ $('#restore-dialog').close(); pendingBackup=null; $('#restore-password').value=''; notice('Sauvegarde restaurée et synchronisée.'); } } catch { $('#restore-error').textContent='Mot de passe ou sauvegarde invalide.'; } finally { button.disabled=false; } }
 function exportCSV() { const heads=['N° de commande','Date','Client','Numéro du client','Désignation','Quantité','Montant produits','Frais livraison','Montant total','Encaissé','Reste à payer','Lieu de livraison','Date livraison','Méthode paiement','Statut','Notes']; const rows=state.orders.map(o=>[o.number,o.date,o.customer,o.phone,o.designation,o.quantity,o.amount,o.deliveryFee,total(o),o.paid,due(o),o.location,o.dueDate,o.method,STATUS[o.status]||o.status,o.note]); const cell=v=>'"'+String(v??'').replaceAll('"','""')+'"'; download(`gourmetscity-commandes-${dakDate()}.csv`,'\uFEFF'+[heads,...rows].map(row=>row.map(cell).join(';')).join('\r\n'),'text/csv;charset=utf-8'); }
-async function init() { try { const legacy=localStorage.getItem(KEY); if(legacy&&!await readEnvelope()){await writeEnvelope(JSON.parse(legacy));localStorage.removeItem(KEY);} const exists=!!await readEnvelope(); if(exists){$('#lock-title').textContent='Ravi de vous retrouver.';$('#lock-copy').textContent='Entrez votre mot de passe pour ouvrir vos données sur ce téléphone.';$('#unlock-button').textContent='Ouvrir mon espace';} } catch { $('#lock-error').textContent='Le stockage local est indisponible sur cet appareil.'; } $('#lock-form').addEventListener('submit',unlock); $('#restore-from-lock').onclick=()=>$('#restore-lock-file').click(); $('#restore-lock-file').onchange=e=>importBackup(e.target.files[0]); $$('[data-view]').forEach(el=>el.onclick=()=>showView(el.dataset.view)); $$('[data-go]').forEach(el=>el.onclick=()=>showView(el.dataset.go)); $$('[data-add]').forEach(el=>el.onclick=()=>openEditor(el.dataset.add)); $('#quick-order').onclick=()=>openEditor('order'); $('#close-dialog').onclick=closeEditor; $('#cancel-dialog').onclick=closeEditor; $('#editor-form').addEventListener('submit',saveEditor); $('#confirm-cancel').onclick=()=>$('#confirm-dialog').close(); ['order-search','order-filter','product-search','expense-search','expense-filter'].forEach(id=>$('#'+id).addEventListener('input',render)); document.addEventListener('click',e=>{ const editButton=e.target.closest('[data-edit]'),deleteButton=e.target.closest('[data-delete]'); if(editButton){const [kind,id]=editButton.dataset.edit.split(':');openEditor(kind,id);} if(deleteButton){const [kind,id]=deleteButton.dataset.delete.split(':');askDelete(kind,id);} }); $('#export-backup').onclick=exportBackup; $('#import-backup').onclick=()=>$('#restore-file').click(); $('#restore-file').onchange=e=>importBackup(e.target.files[0]); $('#export-csv').onclick=exportCSV; $('#lock-button').onclick=()=>location.reload(); window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;$('#install-button').hidden=false;}); $('#install-button').onclick=async()=>{if(deferredInstall){deferredInstall.prompt();deferredInstall=null;}}; if('serviceWorker' in navigator&&location.protocol==='https:') navigator.serviceWorker.register('./sw.js').catch(()=>{}); channel?.addEventListener('message',()=>{if(!$('#app').hidden)notice('Les données ont changé dans un autre onglet. Rechargez cette page.',true);}); }
+async function init() { try { const account=await api('/account'); accountExists=account.exists; if(account.exists){$('#lock-title').textContent='Ravi de vous retrouver.';$('#lock-copy').textContent='Connectez-vous pour retrouver vos données sur cet appareil.';$('#unlock-button').textContent='Ouvrir mon espace';$('#recovery-toggle').hidden=false;}else{$('#lock-title').textContent='Créez votre espace privé.';$('#lock-copy').textContent='Choisissez un mot de passe et saisissez le code de création fourni par le propriétaire.';$('#unlock-button').textContent='Créer mon compte';$('#setup-fields').hidden=false;$('#setup-code').required=true;} } catch(error) { $('#lock-error').textContent=error.message; $('#unlock-button').disabled=true; } $('#lock-form').addEventListener('submit',unlock); $('#recovery-toggle').onclick=toggleRecovery; $('#show-recovery').onclick=showRecovery; $('#close-recovery').onclick=()=>$('#recovery-dialog').close(); $('#download-recovery').onclick=()=>download('gourmetscity-code-recuperation.txt','Code de récupération Gourmet\'s City : '+recoveryCode+'\nConservez ce fichier séparément de votre téléphone.','text/plain;charset=utf-8'); $$('[data-view]').forEach(el=>el.onclick=()=>showView(el.dataset.view)); $$('[data-go]').forEach(el=>el.onclick=()=>showView(el.dataset.go)); $$('[data-add]').forEach(el=>el.onclick=()=>openEditor(el.dataset.add)); $('#quick-order').onclick=()=>openEditor('order'); $('#close-dialog').onclick=closeEditor; $('#cancel-dialog').onclick=closeEditor; $('#editor-form').addEventListener('submit',saveEditor); $('#confirm-cancel').onclick=()=>$('#confirm-dialog').close(); ['order-search','order-filter','product-search','expense-search','expense-filter'].forEach(id=>$('#'+id).addEventListener('input',render)); document.addEventListener('click',e=>{ const editButton=e.target.closest('[data-edit]'),deleteButton=e.target.closest('[data-delete]'); if(editButton){const [kind,id]=editButton.dataset.edit.split(':');openEditor(kind,id);} if(deleteButton){const [kind,id]=deleteButton.dataset.delete.split(':');askDelete(kind,id);} }); $('#export-backup').onclick=exportBackup; $('#import-backup').onclick=()=>$('#restore-file').click(); $('#restore-file').onchange=e=>importBackup(e.target.files[0]); $('#restore-form').addEventListener('submit',restoreBackup); $('#cancel-restore').onclick=()=>{$('#restore-dialog').close();pendingBackup=null;$('#restore-password').value='';}; $('#export-csv').onclick=exportCSV; $('#lock-button').onclick=async()=>{try{await api('/logout','POST');}catch{} location.reload();}; window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;$('#install-button').hidden=false;}); $('#install-button').onclick=async()=>{if(deferredInstall){deferredInstall.prompt();deferredInstall=null;}}; if('serviceWorker' in navigator&&location.protocol==='https:') navigator.serviceWorker.register('./sw.js').catch(()=>{}); document.addEventListener('visibilitychange',()=>{if(!document.hidden)refreshRemote();}); channel?.addEventListener('message',()=>{if(!$('#app').hidden)refreshRemote();}); }
+function showRecovery() { if(!recoveryCode) return; $('#recovery-display').textContent=recoveryCode; $('#recovery-dialog').showModal(); }
+function toggleRecovery() { recoveryMode=!recoveryMode; $('#recovery-fields').hidden=!recoveryMode; $('#recovery-code').required=recoveryMode; $('#password-label').textContent=recoveryMode?'Nouveau mot de passe':'Mot de passe'; $('#passphrase').autocomplete=recoveryMode?'new-password':'current-password'; $('#unlock-button').textContent=recoveryMode?'Réinitialiser le mot de passe':'Ouvrir mon espace'; $('#recovery-toggle').textContent=recoveryMode?'Retour à la connexion':'Mot de passe oublié ?'; $('#lock-error').textContent=''; }
+async function refreshRemote() { if(!authToken||saving||$('#editor-dialog').open||$('#confirm-dialog').open) return; try { const remote=await api('/snapshot'); if(remote.revision===remoteRevision) return; state=await decrypt(remote.envelope,cryptoKey); remoteRevision=remote.revision; recoveryCode=await unwrapRecovery(remote.wrappedRecovery); recoverySalt=unb64(remote.recoveryEnvelope.salt); recoveryKey=await derive(recoveryCode,recoverySalt); await writeEnvelope(remote.envelope).catch(()=>{}); render(); notice('Données mises à jour depuis un autre appareil.'); } catch(error) { notice(error.message,true); } }
 init();
