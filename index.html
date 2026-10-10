@@ -12,8 +12,8 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=7">
-  <script src="app.js?v=7" defer></script>
+  <link rel="stylesheet" href="style.css?v=8">
+  <script src="app.js?v=8" defer></script>
 </head>
 <body>
   <div id="lock" class="lock-screen">
@@ -21,8 +21,8 @@
       <div class="brand-mark">G<span>✦</span>C</div>
       <p class="eyebrow">GOURMET'S CITY · DAKAR</p>
       <h1 id="lock-title">Votre atelier, bien organisé.</h1>
-      <p id="lock-copy" class="muted">Connectez-vous pour retrouver vos commandes sur tous vos appareils.</p>
-      <form id="lock-form">
+      <p id="lock-copy" class="muted">Saisissez le mot de passe choisi lors de la création du compte.</p>
+      <form id="lock-form" novalidate>
         <label for="username">Identifiant</label>
         <input id="username" type="text" required autocomplete="username" value="adjafatou@gourmetcity.com" autocapitalize="none" spellcheck="false">
         <label for="passphrase" id="password-label">Mot de passe</label>
@@ -99,7 +99,7 @@
     <nav class="bottom-nav" aria-label="Navigation mobile"><button data-view="dashboard" class="active"><span>◫</span>Accueil</button><button data-view="orders"><span>▤</span>Commandes</button><button data-view="products"><span>▦</span>Produits</button><button data-view="expenses"><span>◈</span>Dépenses</button><button data-view="settings"><span>⚙</span>Réglages</button></nav>
   </div>
 
-  <dialog id="editor-dialog"><div class="dialog-top"><div><p class="eyebrow" id="dialog-kicker">NOUVEAU</p><h2 id="dialog-title">Nouvelle commande</h2></div><button type="button" class="icon-button" id="close-dialog" aria-label="Fermer">×</button></div><form id="editor-form"><div id="form-fields" class="form-grid"></div><p id="editor-error" class="form-error dialog-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" class="button secondary" id="cancel-dialog">Annuler</button><button type="submit" class="button primary">Enregistrer</button></div></form></dialog>
+  <dialog id="editor-dialog"><div class="dialog-top"><div><p class="eyebrow" id="dialog-kicker">NOUVEAU</p><h2 id="dialog-title">Nouvelle commande</h2></div><button type="button" class="icon-button" id="close-dialog" aria-label="Fermer">×</button></div><form id="editor-form" novalidate><div id="form-fields" class="form-grid"></div><p id="editor-error" class="form-error dialog-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" class="button secondary" id="cancel-dialog">Annuler</button><button type="submit" class="button primary">Enregistrer</button></div></form></dialog>
   <dialog id="confirm-dialog"><h2 id="confirm-title">Confirmer</h2><p id="confirm-copy"></p><div class="dialog-actions"><button type="button" class="button secondary" id="confirm-cancel">Annuler</button><button type="button" class="button danger" id="confirm-yes">Supprimer</button></div></dialog>
   <dialog id="recovery-dialog" class="recovery-dialog"><h2>Gardez ce code de récupération</h2><p>Il permet de créer un nouveau mot de passe si vous oubliez l’ancien. Conservez-le séparément de votre téléphone.</p><code id="recovery-display"></code><div class="dialog-actions"><button type="button" class="button secondary" id="download-recovery">Télécharger le code</button><button type="button" class="button primary" id="close-recovery">J’ai conservé le code</button></div></dialog>
   <dialog id="restore-dialog" class="recovery-dialog"><h2>Restaurer cette sauvegarde ?</h2><p>Les données synchronisées sur tous les appareils seront remplacées par ce fichier.</p><form id="restore-form"><label for="restore-password">Mot de passe du fichier</label><input id="restore-password" type="password" required autocomplete="off"><p id="restore-error" class="form-error" role="alert"></p><div class="dialog-actions"><button type="button" class="button secondary" id="cancel-restore">Annuler</button><button type="submit" class="button primary">Restaurer partout</button></div></form></dialog>
