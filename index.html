@@ -12,8 +12,8 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=10">
-  <script src="app.js?v=10" defer></script>
+  <link rel="stylesheet" href="style.css?v=11">
+  <script src="app.js?v=11" defer></script>
 </head>
 <body>
   <div id="lock" class="lock-screen">
@@ -63,6 +63,16 @@
           <article class="stat-card"><span class="stat-icon gold">◉</span><span>Déjà encaissé</span><strong id="stat-paid">0 F</strong><small>Commandes de ce mois</small></article>
           <article class="stat-card"><span class="stat-icon blue">↘</span><span>Dépenses</span><strong id="stat-expenses">0 F</strong><small>Ce mois</small></article>
         </div>
+        <section class="totals-panel" aria-labelledby="totals-title">
+          <div class="totals-heading"><div><p class="eyebrow">DEPUIS LE DÉBUT</p><h2 id="totals-title">Totaux regroupés</h2></div><p>Commandes non annulées, tous les mois confondus.</p></div>
+          <div class="totals-grid">
+            <div class="total-item"><span>Montant des commandes</span><strong id="total-orders">0 F</strong></div>
+            <div class="total-item"><span>Déjà encaissé</span><strong id="total-paid">0 F</strong></div>
+            <div class="total-item"><span>Reste à encaisser</span><strong id="total-due">0 F</strong></div>
+            <div class="total-item"><span>Dépenses</span><strong id="total-expenses">0 F</strong></div>
+            <div class="total-item total-balance"><span>Encaissé moins dépenses</span><strong id="total-balance">0 F</strong></div>
+          </div>
+        </section>
         <div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><p class="eyebrow">À NE PAS OUBLIER</p><h3>Prochaines commandes</h3></div><button class="text-button" data-go="orders">Tout voir →</button></div><div id="upcoming-list"></div></section><section class="panel"><div class="panel-head"><div><p class="eyebrow">SUIVI RAPIDE</p><h3>À surveiller</h3></div></div><div id="alerts-list"></div><div class="summary-box"><span>Repère du mois</span><strong id="stat-cash">0 F</strong><small>Déjà encaissé sur les commandes du mois, moins les dépenses du mois</small></div></section></div>
       </section>
 
