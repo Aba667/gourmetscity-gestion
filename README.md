@@ -2,6 +2,8 @@
 
 Application privée pour iPhone et iPad : commandes, produits, dépenses, acomptes, reste à encaisser et export CSV.
 
+La vue d'ensemble affiche les totaux cumulés et un récapitulatif pour chaque mois ayant des commandes ou des dépenses. Les commandes annulées sont exclues des montants. Les sommes encaissées et restant à encaisser sont regroupées selon le mois de la commande, car l'application ne conserve pas la date de chaque paiement.
+
 ## Mise en route
 
 1. Ouvrir `https://gestion.gourmetscity.com` dans Safari.

@@ -12,8 +12,8 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css?v=12">
-  <script src="app.js?v=12" defer></script>
+  <link rel="stylesheet" href="style.css?v=13">
+  <script src="app.js?v=13" defer></script>
 </head>
 <body>
   <div id="lock" class="lock-screen">
@@ -73,6 +73,10 @@
             <div class="total-item"><span>Dépenses</span><strong id="total-expenses">0 F</strong></div>
             <div class="total-item total-balance"><span>Encaissé moins dépenses</span><strong id="total-balance">0 F</strong></div>
           </div>
+        </section>
+        <section class="monthly-panel" aria-labelledby="monthly-title">
+          <div class="totals-heading"><div><p class="eyebrow">MOIS PAR MOIS</p><h2 id="monthly-title">Totaux de chaque mois</h2></div><p>Les paiements suivent le mois de la commande ; les dépenses suivent leur date.</p></div>
+          <div id="monthly-list" class="monthly-list"></div>
         </section>
         <div class="dashboard-grid"><section class="panel"><div class="panel-head"><div><p class="eyebrow">À NE PAS OUBLIER</p><h3>Prochaines commandes</h3></div><button class="text-button" data-go="orders">Tout voir →</button></div><div id="upcoming-list"></div></section><section class="panel"><div class="panel-head"><div><p class="eyebrow">SUIVI RAPIDE</p><h3>À surveiller</h3></div></div><div id="alerts-list"></div><div class="summary-box"><span>Repère du mois</span><strong id="stat-cash">0 F</strong><small>Déjà encaissé sur les commandes du mois, moins les dépenses du mois</small></div></section></div>
       </section>
